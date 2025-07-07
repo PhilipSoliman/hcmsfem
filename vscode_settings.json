@@ -77,8 +77,9 @@
         ]
     },
     "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
         "seunlanlege.action-buttons",
-        "James-Yu.latex-workshop",
-        "ms-vscode.makefile-tools"
+        "James-Yu.latex-workshop"
     ]
 }
