@@ -1,4 +1,3 @@
-from ctypes import CDLL, POINTER, byref, c_bool, c_double, c_int
 from typing import Optional
 
 import numpy as np
@@ -13,7 +12,6 @@ from hcmsfem.eigenvalues import eigs
 from hcmsfem.gpu_interface import GPUInterface
 from hcmsfem.logger import LOGGER, PROGRESS
 from hcmsfem.operators import Operator
-from hcmsfem.root import get_root
 
 # initialize GPU interface
 gpu = GPUInterface()
