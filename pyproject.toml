@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools", "wheel", "numpy"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hcmsfem"
+version = "0.1.0"
+description = "High Contrast Multiscale Finite Element Method for Solving PDEs"
+authors = [
+    { name = "Philip Soliman", email = "philipsoliman4133@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "numpy==2.0.2",
+    "matplotlib==3.10.1",
+    "tqdm==4.67.1",
+    "ngsolve==6.2.2406",
+    "scipy==1.15.3",
+    "shapely==2.1.1",
+    "snakeviz==2.2.2",
+    "cholespy==2.1.0",
+    "rich==14.0.0",
+    "scikit-learn==1.7.0"
+    # torch is intentionally omitted from main dependencies
+]
+
+[project.optional-dependencies]
+torch = ["torch"]
+
+[tool.setuptools]
+package-dir = {"" = "hcmsfem"}
+
+[project.urls]
+Homepage = "https://github.com/PhilipSoliman"
+#Documentation = "https://github.com/yourusername/project#readme"
+#Source = "https://github.com/yourusername/project"
+
