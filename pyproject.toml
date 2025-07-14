@@ -22,18 +22,18 @@ dependencies = [
     "snakeviz==2.2.2",
     "cholespy==2.1.0",
     "rich==14.0.0",
-    "scikit-learn==1.7.0"
     # torch is intentionally omitted from main dependencies
 ]
 
 [project.optional-dependencies]
 torch = ["torch"]
 
-[tool.setuptools]
-package-dir = {"" = "hcmsfem"}
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hcmsfem*"]
 
 [project.urls]
-Homepage = "https://github.com/PhilipSoliman"
-#Documentation = "https://github.com/yourusername/project#readme"
-#Source = "https://github.com/yourusername/project"
+Homepage = "https://github.com/PhilipSoliman/hcmsfem"
+Documentation = "https://github.com/PhilipSoliman/hcmsfem/blob/main/README.md"
+Source = "https://github.com/PhilipSoliman/hcmsfem"
 

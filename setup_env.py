@@ -1,12 +1,11 @@
 import argparse
-import json
 import os
 import re
 import subprocess
 import sys
 import venv
 
-# Get the absolute path of the script directory
+# Get the absolute path of the script directory 
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Get the absolute path of the local package directory (same as script directory)

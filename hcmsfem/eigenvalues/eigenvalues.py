@@ -1,11 +1,9 @@
-from typing import Literal, Optional, Union
+from typing import Literal, Union
 
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 import torch.linalg as trl
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
 
 from hcmsfem.gpu_interface import GPUInterface
 from hcmsfem.logger import LOGGER

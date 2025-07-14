@@ -2,8 +2,8 @@ import numpy
 from setuptools import Extension, find_packages, setup
 
 setup(
-    packages=find_packages(where="."),
-    package_dir={"": "."},
+    packages=find_packages(),
+    # package_dir={"": "."},
     ext_modules=[
         Extension(
             "hcmsfem.solvers.clib.custom_cg",
