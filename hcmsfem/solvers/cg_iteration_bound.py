@@ -114,7 +114,7 @@ def multi_cluster_cg_iteration_bound(
             log_rtol=log_rtol_eff,
             exact_convergence=exact_convergence,
         )
-    return sum(degrees)
+    return np.sum(degrees)
 
 
 def sharpened_cg_iteration_bound(
