@@ -85,15 +85,20 @@ def partition_eigenspectrum(eigs: np.ndarray) -> list[int]:
 
 def multi_cluster_cg_iteration_bound(
     clusters: list[tuple[float, float]],
-    tol: float = 1e-6,
+    log_rtol: float = np.log(1e-6),
     exact_convergence: bool = True,
 ) -> int:
     """
     Calculates an improved CG iteration bound for non-uniform eigenspectra.
     Assumes available knowledge on the whereabouts of eigenvalue clusters
+
+    Args:
+        clusters (list[tuple[float, float]]): List of tuples representing the clusters of eigenvalues.
+            Each tuple contains the lower and upper bounds of the cluster.
+        log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
+        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
+            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
     """
-    # setup
-    log_rtol = np.log(tol)
     degrees = [0] * len(clusters)
 
     for i, cluster in enumerate(clusters):
@@ -110,7 +115,7 @@ def multi_cluster_cg_iteration_bound(
 
         # calculate & store chebyshev degree
         degrees[i] = classic_cg_iteration_bound(
-            cond=b_i / a_i,
+            b_i / a_i,
             log_rtol=log_rtol_eff,
             exact_convergence=exact_convergence,
         )
@@ -136,7 +141,7 @@ def sharpened_cg_iteration_bound(
         raise ValueError("All eigenvalues must be positive.")
     partition_indices = partition_eigenspectrum(eigs)
     clusters = []
-    start = 1
+    start = 0
     for end in partition_indices:
         clusters.append((eigs[start], eigs[end]))
         start = end + 1
