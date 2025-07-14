@@ -1,0 +1,145 @@
+import numpy as np
+
+
+def classic_cg_iteration_bound(
+    k: float, log_rtol: float = np.log(1e-6), exact_convergence: bool = True
+) -> int:
+    """
+    Assumes eigenvalues are uniformly distributed between lowest and highest eigenvalue. In this case, the
+    classical CG convergence factor is given by f = (sqrt(cond) - 1) / (sqrt(cond) + 1), where cond is the condition
+    number of A. The number of iterations required to reach a tolerance log_rtol is given by ceil(log(log_rtol / 2) / log(f)).
+
+    Args:
+        k (float): The condition number of the system.
+        log_rtol (float): The log of the convergence tolerance. Defaults to 1e-6.
+        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
+            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
+    """
+    # convergence factor
+    sqrt_cond = np.sqrt(k)
+    convergence_factor = (sqrt_cond - 1) / (sqrt_cond + 1)
+
+    # convergence tolerance
+    conv_tol = log_rtol - np.log(2)
+    if not exact_convergence:  # See report Theorem: "Residual convergence criterion"
+        conv_tol -= np.log(sqrt_cond)
+
+    return int(np.ceil(conv_tol / np.log(convergence_factor)))
+
+
+def split_eigenspectrum(eigs: np.ndarray) -> int:
+    """
+    Splits eigenspectrum between the two eigenvalues that have the largest mutual logarithmic distance.
+
+    Args:
+        eigs (list or np.ndarray): The sorted eigenvalues of the system.
+    Returns:
+        int: The index of the eigenvalue after which the spectrum should be split.
+    """
+    eigs = np.asarray(eigs)
+    log_distances = np.abs(np.log(eigs[1:] / eigs[:-1]))
+    return np.argmax(log_distances)
+
+
+def condition_number_threshold(k: float, k_l: float, k_r: float) -> bool:
+    """
+    Checks if the condition number of the partitioned system is below a threshold.
+
+    Args:
+        k (float): The condition number of the original system.
+        k_l (float): The condition number of the left partition.
+        k_r (float): The condition number of the right partition.
+    Returns:
+        bool: True if the condition number is above the threshold, False otherwise.
+    """
+    x = -1 / (4 * np.sqrt(k_r) * np.exp(1 / (2 * np.sqrt(k_r))))
+    L = np.log(-x)
+    l = np.log(-L)
+    threshold = 4 * k_l * k_r * (L - l + l / L) ** 2
+    return k > threshold
+
+
+def partition_eigenspectrum(eigs: np.ndarray) -> list[int]:
+    """
+    Partitions the eigenspectrum into two parts based on the condition number threshold.
+
+    Args:
+        eigs (np.ndarray): The sorted eigenvalues of the system.
+    Returns:
+        list[int]: The partition indices.
+    """
+    if len(eigs) <= 2:
+        return [len(eigs) - 1]
+    k = eigs[-1] / eigs[0]
+    split_index = split_eigenspectrum(eigs)
+    k_l = eigs[split_index] / eigs[0]
+    k_r = eigs[-1] / eigs[split_index + 1]
+
+    if condition_number_threshold(k, k_l, k_r):
+        return partition_eigenspectrum(
+            eigs[: split_index + 1]
+        ) + partition_eigenspectrum(eigs[split_index + 1 :])
+    else:
+        return [len(eigs) - 1]
+
+
+def multi_cluster_cg_iteration_bound(
+    clusters: list[tuple[float, float]],
+    tol: float = 1e-6,
+    exact_convergence: bool = True,
+) -> int:
+    """
+    Calculates an improved CG iteration bound for non-uniform eigenspectra.
+    Assumes available knowledge on the whereabouts of eigenvalue clusters
+    """
+    # setup
+    log_rtol = np.log(tol)
+    degrees = [0] * len(clusters)
+
+    for i, cluster in enumerate(clusters):
+        a_i, b_i = cluster
+        log_rtol_eff = log_rtol
+        for j in range(i):
+            a_j, b_j = clusters[j]
+            z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
+            z_2 = (b_j + a_j) / (b_j - a_j)
+            m_j = degrees[j]
+            log_rtol_eff -= m_j * (
+                np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
+            )
+
+        # calculate & store chebyshev degree
+        degrees[i] = classic_cg_iteration_bound(
+            cond=b_i / a_i,
+            log_rtol=log_rtol_eff,
+            exact_convergence=exact_convergence,
+        )
+    return sum(degrees)
+
+
+def sharpened_cg_iteration_bound(
+    eigs: np.ndarray, log_rtol: float = np.log(1e-6), exact_convergence: bool = True
+) -> int:
+    """
+    Calculates a sharpened CG iteration bound for non-uniform eigenspectra.
+
+    Args:
+        eigs (np.ndarray): The sorted (approximate) eigenvalues of the system.
+        log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
+        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
+            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
+    """
+    eigs = np.asarray(eigs)
+    if not np.all(eigs[:-1] <= eigs[1:]):
+        eigs = np.sort(eigs)  # Ensure eigenvalues are sorted in ascending order
+    if eigs[0] <= 0:
+        raise ValueError("All eigenvalues must be positive.")
+    partition_indices = partition_eigenspectrum(eigs)
+    clusters = []
+    start = 1
+    for end in partition_indices:
+        clusters.append((eigs[start], eigs[end]))
+        start = end + 1
+    return multi_cluster_cg_iteration_bound(
+        clusters, log_rtol=log_rtol, exact_convergence=exact_convergence
+    )
