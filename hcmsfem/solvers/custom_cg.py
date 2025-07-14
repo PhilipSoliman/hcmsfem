@@ -456,7 +456,7 @@ class CustomCG:
     # helper
     def calculate_iteration_upperbound(self) -> int:
         return classic_cg_iteration_bound(
-            cond=np.linalg.cond(self.A),
+            k=np.linalg.cond(self.A),
             log_rtol=np.log(self.tol),
             exact_convergence=self.exact_convergence,
         )
