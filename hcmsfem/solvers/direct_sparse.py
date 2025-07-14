@@ -1,6 +1,5 @@
 import concurrent.futures
 import multiprocessing
-import threading
 from enum import Enum
 from typing import Callable, Optional
 
@@ -8,8 +7,7 @@ import cholespy as chol
 import numpy as np
 import scipy.sparse as sp
 import torch
-from scipy.sparse.linalg import eigsh, factorized, splu, spsolve
-from tqdm import tqdm
+from scipy.sparse.linalg import eigsh, factorized
 
 from hcmsfem.gpu_interface import GPUInterface
 from hcmsfem.logger import LOGGER, PROGRESS
@@ -222,7 +220,7 @@ class DirectSparseSolver:
                         nz = nzindices[i * self.batch_size + j]
                         x[nz, j] = gpu.retrieve_array(x_device[nz, j])
                 else:
-                    msg =  f"nzindices must be a list of non-zero indices for each column, got {type(nzindices)}"
+                    msg = f"nzindices must be a list of non-zero indices for each column, got {type(nzindices)}"
                     LOGGER.error(msg)
                     raise TypeError(msg)
 
@@ -324,7 +322,11 @@ class DirectSparseSolver:
                 # solve each column in the batch
                 x_batch = []
                 for i in range(rhs_batch.shape[1]):
-                    nz = nzindices[b * self.batch_size + i] if nzindices is not None else np.arange(n_rows)
+                    nz = (
+                        nzindices[b * self.batch_size + i]
+                        if nzindices is not None
+                        else np.arange(n_rows)
+                    )
                     data = self.solver(rhs_batch[:, i].toarray().ravel())[nz]
                     col = sp.csc_matrix(
                         (data, (nz, np.zeros_like(nz))),

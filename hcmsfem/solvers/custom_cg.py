@@ -12,7 +12,7 @@ from hcmsfem.eigenvalues import eigs
 from hcmsfem.gpu_interface import GPUInterface
 from hcmsfem.logger import LOGGER, PROGRESS
 from hcmsfem.operators import Operator
-from hcmsfem.solvers.cg_iteration_bound import classic_cg_iteration_bound
+from hcmsfem.solvers import classic_cg_iteration_bound
 
 # initialize GPU interface
 gpu = GPUInterface()
