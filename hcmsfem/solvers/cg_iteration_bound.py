@@ -43,7 +43,7 @@ def split_eigenspectrum(eigs: np.ndarray) -> int:
 
 def condition_number_threshold(k: float, k_l: float, k_r: float) -> bool:
     """
-    Checks if the condition number of the partitioned system is below a threshold.
+    Checks if the condition number of the partitioned system is above a threshold.
 
     Args:
         k (float): The condition number of the original system.
@@ -61,7 +61,7 @@ def condition_number_threshold(k: float, k_l: float, k_r: float) -> bool:
 
 def partition_eigenspectrum(eigs: np.ndarray) -> list[int]:
     """
-    Partitions the eigenspectrum into two parts based on the condition number threshold.
+    Recursively splits the eigenspectrum into clusters based on the condition number threshold.
 
     Args:
         eigs (np.ndarray): The sorted eigenvalues of the system.
@@ -76,9 +76,14 @@ def partition_eigenspectrum(eigs: np.ndarray) -> list[int]:
     k_r = eigs[-1] / eigs[split_index + 1]
 
     if condition_number_threshold(k, k_l, k_r):
-        return partition_eigenspectrum(
-            eigs[: split_index + 1]
-        ) + partition_eigenspectrum(eigs[split_index + 1 :])
+        return np.concatenate(
+            (
+                partition_eigenspectrum(eigs[: split_index + 1]),
+                split_index
+                + 1
+                + np.array(partition_eigenspectrum(eigs[split_index + 1 :])),
+            )
+        ).tolist()
     else:
         return [len(eigs) - 1]
 
