@@ -59,7 +59,21 @@
             }
         ],
         "latex-workshop.latex.outDir": "%DIR%/build",
-        "python.analysis.extraPaths": ["hcmsfem"]
+        "python.analysis.extraPaths": [
+            "hcmsfem"
+        ],
+        "[latex]": {
+            "editor.wordWrap": "bounded",
+            "editor.wordWrapColumn": 150
+        },
+        "[python]": {
+            "editor.wordWrap": "bounded",
+            "editor.wordWrapColumn": 100
+        },
+        "[markdown]": {
+            "editor.wordWrap": "bounded",
+            "editor.wordWrapColumn": 150
+        }
     },
     "launch": {
         "version": "0.2.0",
