@@ -6,13 +6,13 @@
                     "name": "$(triangle-right) Run Python (show output)",
                     "color": "green",
                     "singleInstance": true,
-                    "command": "python ${file} --show-output"
+                    "command": "${workspaceFolder}/.venv/Scripts/python.exe ${file} --show-output"
                 },
                 {
                     "name": "$(triangle-right) Run Python (generate output)",
                     "color": "green",
                     "singleInstance": true,
-                    "command": "python ${file} --generate-output"
+                    "command": "${workspaceFolder}/.venv/Scripts/python.exe ${file} --generate-output"
                 }
             ],
             "defaultColor": "white",
