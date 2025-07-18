@@ -1,7 +1,9 @@
 from .cg_iteration_bound import (
     classic_cg_iteration_bound,
+    mixed_sharpened_cg_iteration_bound,
     multi_cluster_cg_iteration_bound,
     partition_eigenspectrum,
+    partition_mixed_eigenspectrum,
     sharpened_cg_iteration_bound,
 )
 from .custom_cg import CustomCG
@@ -14,5 +16,7 @@ __all__ = [
     "multi_cluster_cg_iteration_bound",
     "classic_cg_iteration_bound",
     "partition_eigenspectrum",
+    "partition_mixed_eigenspectrum",
     "sharpened_cg_iteration_bound",
+    "mixed_sharpened_cg_iteration_bound",
 ]

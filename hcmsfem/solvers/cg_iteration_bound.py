@@ -1,4 +1,5 @@
 import numpy as np
+from sympy import Lambda
 
 
 def classic_cg_iteration_bound(
@@ -141,7 +142,9 @@ def sharpened_cg_iteration_bound(
     """
     eigs = np.asarray(eigs)
     if len(eigs) == 1:
-        return 1  # Only one eigenvalue provided, not enough information to calculate bound
+        return (
+            1  # Only one eigenvalue provided, not enough information to calculate bound
+        )
     if not np.all(eigs[:-1] <= eigs[1:]):
         eigs = np.sort(eigs)  # Ensure eigenvalues are sorted in ascending order
     if eigs[0] <= 0:
@@ -154,4 +157,191 @@ def sharpened_cg_iteration_bound(
         start = end + 1
     return multi_cluster_cg_iteration_bound(
         clusters, log_rtol=log_rtol, exact_convergence=exact_convergence
+    )
+
+
+def sparsity_condition(
+    p: int, k: float, k_l: float, k_r: float, log_rtol: float
+) -> bool:
+    if k_l > k_r:
+        return False  # expansion is not valid
+
+    # return p < np.sqrt(k / k_r) * np.log(2) * (-log_rtol) / np.log(4 * k_r)
+    return p < np.sqrt(k_l) / 2 * np.log(2) * (-log_rtol)
+
+
+def get_tail_indices(
+    eigs: np.ndarray, log_rtol: float, tail_eigenvalues: list[float] = []
+) -> list[int]:
+    """
+    Recursively finds the indices of tail eigenvalues in the eigenspectrum based on the sparsity condition. Removes the tail cluster from eigs and stores them in tail_eigenvalues.
+
+    Args:
+        eigs (np.ndarray): The sorted eigenvalues of the system.
+        log_rtol (float): The log of the convergence tolerance.
+        tail_eigenvalues (list[float]): empty list to hold tail eigenvalues.
+    Returns:
+        list[int]: The starting indices of the tail eigenvalues.
+    """
+    pass
+
+
+def partition_mixed_eigenspectrum(
+    eigs: np.ndarray,
+    log_rtol: float,
+    tail_eigenvalues: list[float] = [],
+    tail_indices: list[int] = [],
+    start_idx: int = 0,
+) -> list[int]:
+    """
+    Recursively splits the eigenspectrum into tail eigenvalues and clusters based on the sparsity condition. If the sparsity condition is not met, it clusters based on the condition number threshold.
+
+    Args:
+        eigs (np.ndarray): The sorted eigenvalues of the system.
+        log_rtol (float): The log of the convergence tolerance.
+        tail_eigenvalues (list[float]): empty list to hold tail eigenvalues.
+        tail_indices (list[int]): empty list to hold starting indices of tail cluster.
+    Returns:
+        list[int]: The partition indices.
+    """
+    if len(eigs) <= 2:
+        return [len(eigs) - 1]
+    k = eigs[-1] / eigs[0]
+    split_index = split_eigenspectrum(eigs)
+    k_l = eigs[split_index] / eigs[0]
+    k_r = eigs[-1] / eigs[split_index + 1]
+    p = split_index + 1
+
+    # check sparsity condition
+    if sparsity_condition(p, k, k_l, k_r, log_rtol=log_rtol):
+        tail_eigenvalues += eigs[:p].tolist()
+        tail_indices.append(start_idx)
+        return [split_index] + (
+            p
+            + np.array(
+                partition_mixed_eigenspectrum(
+                    eigs[p:],
+                    log_rtol=log_rtol,
+                    tail_eigenvalues=tail_eigenvalues,
+                    tail_indices=tail_indices,
+                    start_idx=start_idx + p,
+                )
+            )
+        ).tolist()
+    elif condition_number_threshold(k, k_l, k_r):
+        return (
+            partition_mixed_eigenspectrum(
+                eigs[:p],
+                log_rtol=log_rtol,
+                tail_eigenvalues=tail_eigenvalues,
+                tail_indices=tail_indices,
+                start_idx=start_idx,
+            )
+            + (
+                p
+                + np.array(
+                    partition_mixed_eigenspectrum(
+                        eigs[p:],
+                        log_rtol=log_rtol,
+                        tail_eigenvalues=tail_eigenvalues,
+                        tail_indices=tail_indices,
+                        start_idx=start_idx + p,
+                    )
+                )
+            ).tolist()
+        )
+    else:
+        return [len(eigs) - 1]
+
+
+def mixed_multi_cluster_cg_iteration_bound(
+    clusters: list[tuple[float, float]],
+    tail_eigenvalues: list[float],
+    log_rtol: float = np.log(1e-6),
+    exact_convergence: bool = True,
+) -> int:
+    """
+    Similar to `multi_cluster_cg_iteration_bound`, but allows for a list of tail eigenvalues to be passed in.
+
+    Args:
+        clusters (list[tuple[float, float]]): List of tuples representing the clusters of eigenvalues.
+            Each tuple contains the lower and upper bounds of the cluster.
+        tail_eigenvalues (list[float]): List of tail eigenvalues.
+        log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
+        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
+            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
+    """
+    degrees = [0] * len(clusters)
+
+    # Each factor is (1 - x / lambda_i) = (-1/lambda_i)x + 1
+    factors = [np.poly1d([-1.0 / eig, 1.0]) for eig in tail_eigenvalues]
+
+    # Multiply all factors together
+    r_poly = np.poly1d([1.0])  # start with the constant polynomial 1
+    for f in factors:
+        r_poly *= f
+
+    for i, cluster in enumerate(clusters):
+        a_i, b_i = cluster
+        log_rtol_eff = log_rtol - np.log(
+            np.abs(r_poly(b_i))
+        )  # adjust log_rtol by the polynomial value at b_i
+        for j in range(i):
+            a_j, b_j = clusters[j]
+            z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
+            z_2 = (b_j + a_j) / (b_j - a_j)
+            m_j = degrees[j]
+            log_rtol_eff -= m_j * (
+                np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
+            )
+
+        # calculate & store chebyshev degree
+        degrees[i] = classic_cg_iteration_bound(
+            b_i / a_i,
+            log_rtol=log_rtol_eff,
+            exact_convergence=exact_convergence,
+        )
+    return np.sum(degrees)
+
+
+def mixed_sharpened_cg_iteration_bound(
+    eigs: np.ndarray, log_rtol: float = np.log(1e-6), exact_convergence: bool = True
+) -> int:
+    """
+    Calculates a sharpened CG iteration bound for non-uniform eigenspectra.
+
+    Args:
+        eigs (np.ndarray): The sorted (approximate) eigenvalues of the system.
+        log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
+        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
+            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
+    """
+    eigs = np.asarray(eigs)
+    if len(eigs) == 1:
+        return (
+            1  # Only one eigenvalue provided, not enough information to calculate bound
+        )
+    if not np.all(eigs[:-1] <= eigs[1:]):
+        eigs = np.sort(eigs)  # Ensure eigenvalues are sorted in ascending order
+    if eigs[0] <= 0:
+        raise ValueError("All eigenvalues must be positive.")
+    tail_eigenvalues = []
+    tail_indices = []
+    partition_indices = partition_mixed_eigenspectrum(
+        eigs,
+        log_rtol=log_rtol,
+        tail_eigenvalues=tail_eigenvalues,
+        tail_indices=tail_indices,
+    )
+    clusters = []
+    start = 0
+    for end in partition_indices:
+        if not np.isin(start, tail_indices):  # skip over tail clusters
+            clusters.append((eigs[start], eigs[end]))
+        start = end + 1
+    return mixed_multi_cluster_cg_iteration_bound(
+        clusters,
+        tail_eigenvalues=tail_eigenvalues,
+        log_rtol=log_rtol,
+        exact_convergence=exact_convergence,
     )
