@@ -1,3 +1,4 @@
+from functools import singledispatch
 from typing import Optional
 
 import numpy as np
@@ -403,10 +404,16 @@ class CustomCG:
         return eigenvalues
 
     def get_lanczos_matrix(self) -> csc_matrix:
-        delta = 1 / self.alpha + np.append(0, self.beta / self.alpha[:-1])
-        eta = np.sqrt(self.beta) / self.alpha[:-1]
+        return self.get_lanczos_matrix_from_coefficients(self.alpha, self.beta)
+
+    @staticmethod
+    def get_lanczos_matrix_from_coefficients(
+        alpha: np.ndarray, beta: np.ndarray
+    ) -> csc_matrix:
+        delta = 1 / alpha + np.append(0, beta / alpha[:-1])
+        eta = np.sqrt(beta) / alpha[:-1]
         return spdiags(
-            [eta, delta, eta], offsets=[-1, 0, 1], shape=(self.niters, self.niters)  # type: ignore
+            [eta, delta, eta], offsets=[-1, 0, 1], shape=(len(alpha), len(alpha))  # type: ignore
         ).tocsc()
 
     def residual_polynomials(self) -> list[np.ndarray]:
