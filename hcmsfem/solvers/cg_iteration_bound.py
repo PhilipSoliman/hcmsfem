@@ -140,6 +140,8 @@ def sharpened_cg_iteration_bound(
             otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
     """
     eigs = np.asarray(eigs)
+    if len(eigs) == 1:
+        return 1  # Only one eigenvalue provided, not enough information to calculate bound
     if not np.all(eigs[:-1] <= eigs[1:]):
         eigs = np.sort(eigs)  # Ensure eigenvalues are sorted in ascending order
     if eigs[0] <= 0:
