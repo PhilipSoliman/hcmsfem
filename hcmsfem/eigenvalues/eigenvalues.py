@@ -23,8 +23,8 @@ def eigs(
 
     Args:
         library (str): The library to use for computing eigenvalues ('torch' or 'scipy').
-        num_eigs (int): The number of eigenvalues to compute.
-        which (str): Specifies which eigenvalues to compute ('BE' for both ends).
+        num_eigs (int): The number of eigenvalues to compute. Only used if library is 'scipy'.
+        which (str): Specifies which eigenvalues to compute ('BE' for both ends). Only used if library is 'scipy'.
 
     Returns:
         np.ndarray: The computed eigenvalues.
