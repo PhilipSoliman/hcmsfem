@@ -77,13 +77,10 @@ def partition_eigenspectrum(eigs: np.ndarray) -> list[int]:
     """
     if len(eigs) == 0:
         return []
-    elif len(eigs) == 1:
-        # raise ValueError("Cannot partition eigenspectrum with only one eigenvalue.")
-        return [0]
-    elif len(eigs) == 2:
+    elif len(eigs) <= 2:
         # always return the index of the second eigenvalue
         # this ensures that we have at least one cluster
-        return [1]
+        return [len(eigs) - 1]
     k = eigs[-1] / eigs[0]
     split_index = split_eigenspectrum(eigs)
     k_l = eigs[split_index] / eigs[0]
