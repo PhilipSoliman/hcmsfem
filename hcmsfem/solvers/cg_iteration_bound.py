@@ -16,16 +16,22 @@ def classic_cg_iteration_bound(
         exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
             otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
     """
-    # convergence factor
-    sqrt_cond = np.sqrt(k)
-    convergence_factor = (sqrt_cond - 1) / (sqrt_cond + 1)
+    if k > 1:
+        # convergence factor
+        sqrt_cond = np.sqrt(k)
+        convergence_factor = (sqrt_cond - 1) / (sqrt_cond + 1)
 
-    # convergence tolerance
-    conv_tol = log_rtol - np.log(2)
-    if not exact_convergence:  # See report Theorem: "Residual convergence criterion"
-        conv_tol -= np.log(sqrt_cond)
+        # convergence tolerance
+        conv_tol = log_rtol - np.log(2)
+        if (
+            not exact_convergence
+        ):  # See report Theorem: "Residual convergence criterion"
+            conv_tol -= np.log(sqrt_cond)
 
-    return int(np.ceil(conv_tol / np.log(convergence_factor)))
+        return int(np.ceil(conv_tol / np.log(convergence_factor)))
+    elif k == 1:
+        # if condition number is 1, then the system only requires one iteration
+        return 1
 
 
 def split_eigenspectrum(eigs: np.ndarray) -> int:
@@ -69,8 +75,15 @@ def partition_eigenspectrum(eigs: np.ndarray) -> list[int]:
     Returns:
         list[int]: The partition indices.
     """
-    if len(eigs) <= 2:
-        return [len(eigs) - 1]
+    if len(eigs) == 0:
+        return []
+    elif len(eigs) == 1:
+        # raise ValueError("Cannot partition eigenspectrum with only one eigenvalue.")
+        return [0]
+    elif len(eigs) == 2:
+        # always return the index of the second eigenvalue
+        # this ensures that we have at least one cluster
+        return [1]
     k = eigs[-1] / eigs[0]
     split_index = split_eigenspectrum(eigs)
     k_l = eigs[split_index] / eigs[0]
@@ -112,12 +125,18 @@ def multi_cluster_cg_iteration_bound(
         log_rtol_eff = log_rtol
         for j in range(i):
             a_j, b_j = clusters[j]
-            z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
-            z_2 = (b_j + a_j) / (b_j - a_j)
-            m_j = degrees[j]
-            log_rtol_eff -= m_j * (
-                np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
-            )
+            if a_j != b_j:
+                z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
+                z_2 = (b_j + a_j) / (b_j - a_j)
+                m_j = degrees[j]
+                log_rtol_eff -= m_j * (
+                    np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
+                )
+            else:
+                # if the cluster has unit condition number, we assume a regular polynomial
+                log_rtol_eff -= np.log(
+                    abs(1 - b_i / a_j)
+                )
 
         # calculate & store chebyshev degree
         degrees[i] = classic_cg_iteration_bound(
@@ -142,9 +161,8 @@ def sharpened_cg_iteration_bound(
     """
     eigs = np.asarray(eigs)
     if len(eigs) == 1:
-        return (
-            1  # Only one eigenvalue provided, not enough information to calculate bound
-        )
+        # Only one eigenvalue provided, not enough information to calculate bound
+        return 1
     if not np.all(eigs[:-1] <= eigs[1:]):
         eigs = np.sort(eigs)  # Ensure eigenvalues are sorted in ascending order
     if eigs[0] <= 0:
