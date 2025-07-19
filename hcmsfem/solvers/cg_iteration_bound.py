@@ -117,9 +117,18 @@ def multi_cluster_cg_iteration_bound(
     """
     degrees = [0] * len(clusters)
 
+    # find all clusters with unit condition number
+    unit_clusters = [i for i, (a, b) in enumerate(clusters) if a == b]
+
     for i, cluster in enumerate(clusters):
+        if i in unit_clusters:
+            continue
         a_i, b_i = cluster
-        log_rtol_eff = log_rtol
+
+        # subtract unit cluster contributions from log_rtol
+        log_rtol_eff = log_rtol - np.sum(
+            [np.log(abs(1 - b_i / clusters[u][0])) for u in unit_clusters]
+        )
         for j in range(i):
             a_j, b_j = clusters[j]
             if a_j != b_j:
@@ -129,11 +138,9 @@ def multi_cluster_cg_iteration_bound(
                 log_rtol_eff -= m_j * (
                     np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
                 )
-            else:
-                # if the cluster has unit condition number, we assume a regular polynomial
-                log_rtol_eff -= np.log(
-                    abs(1 - b_i / a_j)
-                )
+            # else:
+            #     # if the cluster has unit condition number, we assume a regular polynomial
+            #     log_rtol_eff -= np.log(abs(1 - b_i / a_j))
 
         # calculate & store chebyshev degree
         degrees[i] = classic_cg_iteration_bound(
@@ -141,7 +148,7 @@ def multi_cluster_cg_iteration_bound(
             log_rtol=log_rtol_eff,
             exact_convergence=exact_convergence,
         )
-    return np.sum(degrees)
+    return np.sum(degrees) + len(unit_clusters)  # add the unit clusters count
 
 
 def sharpened_cg_iteration_bound(
@@ -352,8 +359,6 @@ def mixed_sharpened_cg_iteration_bound(
     start = 0
     for end in partition_indices:
         if not np.isin(start, tail_indices):  # skip over tail clusters
-            if start == end:
-                pass
             clusters.append((eigs[start], eigs[end]))
         start = end + 1
     return mixed_multi_cluster_cg_iteration_bound(
