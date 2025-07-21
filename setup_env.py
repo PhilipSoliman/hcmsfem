@@ -196,6 +196,11 @@ def main():
         action="store_true",
         help="Skip VSCode settings setup",
     )
+    parser.add_argument(
+        "--no-activate",
+        action="store_true",
+        help="Do not activate the virtual environment after setup",
+    )
 
     args = parser.parse_args()
 
@@ -214,8 +219,8 @@ def main():
     if not args.skip_vscode:
         setup_vscode_settings()
 
-    activate_environment()
-    sys.exit(0)
+    if not args.no_activate:
+        activate_environment()
 
 
 if __name__ == "__main__":
