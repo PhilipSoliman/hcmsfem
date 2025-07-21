@@ -62,9 +62,12 @@
         "python.analysis.extraPaths": [
             "hcmsfem"
         ],
+        "latex-workshop.formatting.latex": "latexindent",
         "[latex]": {
             "editor.wordWrap": "bounded",
-            "editor.wordWrapColumn": 150
+            "editor.wordWrapColumn": 150,
+            "editor.formatOnSave": true,
+            "editor.defaultFormatter": "James-Yu.latex-workshop"
         },
         "[python]": {
             "editor.wordWrap": "bounded",
