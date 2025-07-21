@@ -1,4 +1,5 @@
 from .cg_iteration_bound import (
+    CGIterationBound,
     classic_cg_iteration_bound,
     mixed_sharpened_cg_iteration_bound,
     multi_cluster_cg_iteration_bound,
@@ -19,4 +20,5 @@ __all__ = [
     "partition_mixed_eigenspectrum",
     "sharpened_cg_iteration_bound",
     "mixed_sharpened_cg_iteration_bound",
+    "CGIterationBound",
 ]
