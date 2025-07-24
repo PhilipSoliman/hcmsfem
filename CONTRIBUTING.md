@@ -24,12 +24,3 @@ All commits to this repository must be signed and verified. This ensures the aut
 
 4. **Verify your setup**:
    Make a test commit and check that it shows as "Verified" on GitHub.
-
-### Development Guidelines
-
-- Ensure all commits are signed and verified
-- Follow the existing code style and structure
-- Add appropriate tests for new functionality
-- Update documentation as needed
-
-For questions about contributing, please open an issue.

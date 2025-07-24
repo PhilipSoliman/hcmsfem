@@ -1,0 +1,103 @@
+{
+    "settings": {
+        "actionButtons": {
+            "commands": [
+                {
+                    "name": "$(triangle-right) Run Python (show output)",
+                    "color": "green",
+                    "singleInstance": true,
+                    "command": "${workspaceFolder}/.venv/Scripts/python.exe ${file} --show-output"
+                },
+                {
+                    "name": "$(triangle-right) Run Python (generate output)",
+                    "color": "green",
+                    "singleInstance": true,
+                    "command": "${workspaceFolder}/.venv/Scripts/python.exe ${file} --generate-output"
+                }
+            ],
+            "defaultColor": "white",
+            "reloadButton": "↻",
+            "loadNpmCommands": false
+        },
+        "latex-workshop.intellisense.citation.backend": "biblatex",
+        "latex-workshop.kpsewhich.enabled": false,
+        "latex-workshop.latex.recipes": [
+            {
+                "name": "lualatexmk -> biber -> lualatexmk * 2",
+                "tools": [
+                    "lualatexmk",
+                    "biber",
+                    "lualatexmk",
+                    "lualatexmk"
+                ]
+            }
+        ],
+        "latex-workshop.latex.tools": [
+            {
+                "name": "lualatexmk",
+                "command": "latexmk",
+                "args": [
+                    "-synctex=1",
+                    "-cd",
+                    "-interaction=nonstopmode",
+                    "-file-line-error",
+                    "-lualatex",
+                    "-outdir=%OUTDIR%",
+                    "%DOC%"
+                ],
+                "env": {}
+            },
+            {
+                "name": "biber",
+                "command": "biber",
+                "args": [
+                    "--input-directory=%OUTDIR%",
+                    "--output-directory=%OUTDIR%",
+                    "%DOCFILE%"
+                ],
+                "env": {}
+            }
+        ],
+        "latex-workshop.latex.outDir": "%DIR%/build",
+        "python.analysis.extraPaths": [
+            "hcmsfem"
+        ],
+        "latex-workshop.formatting.latex": "latexindent",
+        "[latex]": {
+            "editor.wordWrap": "bounded",
+            "editor.wordWrapColumn": 150,
+            "editor.formatOnSave": true,
+            "editor.defaultFormatter": "James-Yu.latex-workshop"
+        },
+        "[python]": {
+            "editor.wordWrap": "bounded",
+            "editor.wordWrapColumn": 100
+        },
+        "[markdown]": {
+            "editor.wordWrap": "bounded",
+            "editor.wordWrapColumn": 150
+        }
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "Python Debugger: Current File",
+                "type": "debugpy",
+                "request": "launch",
+                "program": "${file}",
+                "console": "integratedTerminal",
+                "env": {
+                    "MY_LOG_LEVEL": "DEBUG",
+                    "DISABLE_PROGRESS": "1"
+                }
+            }
+        ]
+    },
+    "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "seunlanlege.action-buttons",
+        "James-Yu.latex-workshop"
+    ]
+}

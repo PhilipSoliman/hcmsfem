@@ -1,4 +1,4 @@
-from ctypes import CDLL, POINTER, byref, c_bool, c_double, c_int
+from functools import singledispatch
 from typing import Optional
 
 import numpy as np
@@ -13,7 +13,7 @@ from hcmsfem.eigenvalues import eigs
 from hcmsfem.gpu_interface import GPUInterface
 from hcmsfem.logger import LOGGER, PROGRESS
 from hcmsfem.operators import Operator
-from hcmsfem.root import get_root
+from hcmsfem.solvers import classic_cg_iteration_bound
 
 # initialize GPU interface
 gpu = GPUInterface()
@@ -404,10 +404,16 @@ class CustomCG:
         return eigenvalues
 
     def get_lanczos_matrix(self) -> csc_matrix:
-        delta = 1 / self.alpha + np.append(0, self.beta / self.alpha[:-1])
-        eta = np.sqrt(self.beta) / self.alpha[:-1]
+        return self.get_lanczos_matrix_from_coefficients(self.alpha, self.beta)
+
+    @staticmethod
+    def get_lanczos_matrix_from_coefficients(
+        alpha: np.ndarray, beta: np.ndarray
+    ) -> csc_matrix:
+        delta = 1 / alpha + np.append(0, beta / alpha[:-1])
+        eta = np.sqrt(beta) / alpha[:-1]
         return spdiags(
-            [eta, delta, eta], offsets=[-1, 0, 1], shape=(self.niters, self.niters)  # type: ignore
+            [eta, delta, eta], offsets=[-1, 0, 1], shape=(len(alpha), len(alpha))  # type: ignore
         ).tocsc()
 
     def residual_polynomials(self) -> list[np.ndarray]:
@@ -456,77 +462,11 @@ class CustomCG:
 
     # helper
     def calculate_iteration_upperbound(self) -> int:
-        return CustomCG.calculate_iteration_upperbound_static(
-            cond=np.linalg.cond(self.A),  # type: ignore
+        return classic_cg_iteration_bound(
+            k=np.linalg.cond(self.A),
             log_rtol=np.log(self.tol),
             exact_convergence=self.exact_convergence,
         )
-
-    @staticmethod
-    def calculate_iteration_upperbound_static(
-        cond: float, log_rtol: float, exact_convergence: bool = True
-    ) -> int:
-        """
-        Assumes eigenvalues are uniformly distributed between lowest and highest eigenvalue. In this case, the
-        classical CG convergence factor is given by f = (sqrt(cond) - 1) / (sqrt(cond) + 1), where cond is the condition
-        number of A. The number of iterations required to reach a tolerance tol is given by ceil(log(tol / 2) / log(f)).
-        """
-        # convergence factor
-        sqrt_cond = np.sqrt(cond)
-        convergence_factor = (sqrt_cond - 1) / (sqrt_cond + 1)
-
-        # convergence tolerance
-        conv_tol = log_rtol - np.log(2)
-        if (
-            not exact_convergence
-        ):  # See report Theorem: "Residual convergence criterion"
-            conv_tol -= np.log(sqrt_cond)
-
-        return int(np.ceil(conv_tol / np.log(convergence_factor)))
-
-    def calculate_improved_cg_iteration_upperbound(
-        self,
-        clusters: list[tuple[float, float]],
-    ) -> int:
-        return CustomCG.calculate_improved_cg_iteration_upperbound_static(
-            clusters=clusters,
-            tol=self.tol,
-            exact_convergence=self.exact_convergence,
-        )
-
-    @staticmethod
-    def calculate_improved_cg_iteration_upperbound_static(
-        clusters: list[tuple[float, float]],
-        tol: float = 1e-6,
-        exact_convergence: bool = True,
-    ) -> int:
-        """
-        Calculates an improved CG iteration bound for non-uniform eigenspectra.
-        Assumes available knowledge on the whereabouts of eigenvalue clusters
-        """
-        # setup
-        log_rtol = np.log(tol)
-        degrees = [0] * len(clusters)
-
-        for i, cluster in enumerate(clusters):
-            a_i, b_i = cluster
-            log_rtol_eff = log_rtol
-            for j in range(i):
-                a_j, b_j = clusters[j]
-                z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
-                z_2 = (b_j + a_j) / (b_j - a_j)
-                m_j = degrees[j]
-                log_rtol_eff -= m_j * (
-                    np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
-                )
-
-            # calculate & store chebyshev degree
-            degrees[i] = CustomCG.calculate_iteration_upperbound_static(
-                cond=b_i / a_i,
-                log_rtol=log_rtol_eff,
-                exact_convergence=exact_convergence,
-            )
-        return sum(degrees)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import subprocess
 import sys
 import venv
 
-# Get the absolute path of the script directory
+# Get the absolute path of the script directory 
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Get the absolute path of the local package directory (same as script directory)
@@ -40,16 +40,16 @@ def setup_paths(use_parent=False, venv_name=".venv"):
 def create_virtual_environment():
     if not os.path.exists(VENV_DIR):
         venv.create(VENV_DIR, with_pip=True)
-        print(f"Created virtual environment '{VENV_DIR}'")
+        print(f"✅ Created virtual environment '{VENV_DIR}'\n")
     else:
         print(f"Virtual environment '{VENV_DIR}' already exists")
 
 
-def install_requirements():
+def install_package():
 
     # upgrade pip
     subprocess.check_call([PYTHON_EXEC, "-m", "pip", "install", "--upgrade", "pip"])
-    print("Upgraded pip to latest version")
+    print("✅ Upgraded pip to latest version\n")
 
     # install local python package
     subprocess.check_call(
@@ -62,7 +62,7 @@ def install_requirements():
             PACKAGE_DIR,
         ]
     )
-    print(f"Installed local package in {PACKAGE_DIR}")
+    print(f"✅ Installed local package in {PACKAGE_DIR}\n")
 
     # install PyTorch with or without CUDA support
     cuda_version = _get_cuda_version()
@@ -86,7 +86,7 @@ def install_requirements():
         ]
     )
     print(
-        f"Installed PyTorch {'with CUDA support' if cuda_used else 'without CUDA support'}"
+        f"✅ Installed PyTorch {'with CUDA support' if cuda_used else 'without CUDA support'}\n"
     )
 
 
@@ -109,7 +109,7 @@ def generate_meshes_for_experiments():
         print("Failed to generate meshes. Exiting.")
         sys.exit(1)
 
-    print("Meshes generated successfully.")
+    print("✅ Meshes generated successfully\n")
 
 
 def activate_environment():
@@ -139,6 +139,40 @@ def _get_cuda_version():
         return ""
 
 
+def setup_vscode_settings():
+    """Setup VSCode settings by calling the setup_vscode.py script."""
+    setup_vscode_script = os.path.join(SCRIPT_DIR, "setup_vscode.py")
+
+    if not os.path.exists(setup_vscode_script):
+        print(f"Warning: VSCode setup script not found at {setup_vscode_script}")
+        return
+
+    # Ask user if they want to setup VSCode settings
+    user_input = input("Setup VSCode settings for this project? [y/n]: ")
+    if user_input.lower() != "y":
+        print("Skipping VSCode setup.")
+        return
+
+    # Determine target directory (same as VENV_DIR parent)
+    target_dir = os.path.dirname(VENV_DIR)
+
+    try:
+        # Call setup_vscode.py as subprocess
+        subprocess.check_call(
+            [
+                sys.executable,
+                setup_vscode_script,
+                "--dir",
+                target_dir,
+                "--force",  # Don't prompt since we already asked the user
+            ]
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to setup VSCode settings: {e}")
+    except Exception as e:
+        print(f"Error running VSCode setup: {e}")
+
+
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(
@@ -157,6 +191,16 @@ def main():
         default=".venv",
         help="Name of the virtual environment directory (default: .venv)",
     )
+    parser.add_argument(
+        "--skip-vscode",
+        action="store_true",
+        help="Skip VSCode settings setup",
+    )
+    parser.add_argument(
+        "--no-activate",
+        action="store_true",
+        help="Do not activate the virtual environment after setup",
+    )
 
     args = parser.parse_args()
 
@@ -168,10 +212,15 @@ def main():
     print(f"Virtual environment will be created at: {abs_venv_path}")
 
     create_virtual_environment()
-    install_requirements()
+    install_package()
     generate_meshes_for_experiments()
-    activate_environment()
-    sys.exit(0)
+
+    # Setup VSCode settings (unless skipped)
+    if not args.skip_vscode:
+        setup_vscode_settings()
+
+    if not args.no_activate:
+        activate_environment()
 
 
 if __name__ == "__main__":
