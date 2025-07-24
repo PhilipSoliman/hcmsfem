@@ -7,13 +7,16 @@ from sympy import Lambda
 from hcmsfem.logger import LOGGER
 
 
+#######################
+# CG Iteration Bounds #
+#######################
 def classic_cg_iteration_bound(
     k: float, log_rtol: float = np.log(1e-6), exact_convergence: bool = True
 ) -> int:
     """
     Assumes eigenvalues are uniformly distributed between lowest and highest eigenvalue. In this case, the
-    classical CG convergence factor is given by f = (sqrt(cond) - 1) / (sqrt(cond) + 1), where cond is the condition
-    number of A. The number of iterations required to reach a tolerance log_rtol is given by ceil(log(log_rtol / 2) / log(f)).
+    classical CG convergence factor is given by `f = (sqrt(cond) - 1) / (sqrt(cond) + 1)`, where cond is the condition
+    number of A. The number of iterations required to reach a tolerance log_rtol is given by `ceil((log_rtol - log(2)) / log(f))`.
 
     Args:
         k (float): The condition number of the system.
@@ -28,9 +31,9 @@ def classic_cg_iteration_bound(
 
         # convergence tolerance
         conv_tol = log_rtol - np.log(2)
-        if (
-            not exact_convergence
-        ):  # See report Theorem: "Residual convergence criterion"
+
+        # See report, Theorem: "Residual convergence criterion"
+        if not exact_convergence:
             conv_tol -= np.log(sqrt_cond)
 
         return int(np.ceil(conv_tol / np.log(convergence_factor)))
@@ -39,6 +42,58 @@ def classic_cg_iteration_bound(
         return 1
 
 
+def generalized_cg_iteration_bound(
+    clusters: list[tuple[float, float]],
+    tail_eigenvalues: list[float] = [],
+    log_rtol: float = np.log(1e-6),
+    exact_convergence: bool = True,
+) -> int:
+    """
+    Generalized CG iteration bound for non-uniform eigenspectra consisting of a combination of clusters and tail eigenvalues.
+
+    Args:
+        clusters (list[tuple[float, float]]): List of tuples representing the clusters of eigenvalues.
+            Each tuple contains the lower and upper bounds of the cluster.
+        tail_eigenvalues (list[float]): List of tail eigenvalues.
+        log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
+        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
+            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
+    """
+    # list to hold Chebyshev degree of each cluster
+    degrees = [0] * len(clusters)
+
+    # number of tail eigenvalues
+    N_t = len(tail_eigenvalues)
+
+    # tail eigenvalue polynomial
+    def log_r_t(x):
+        return np.sum(np.log(np.abs(1 - x / np.array(tail_eigenvalues))))
+
+    for i, cluster in enumerate(clusters):
+        a_i, b_i = cluster
+        r_t_max = np.max([log_r_t(a_i), log_r_t(b_i)])
+        log_rtol_eff = log_rtol - r_t_max
+        for j in range(i):
+            a_j, b_j = clusters[j]
+            z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
+            z_2 = (b_j + a_j) / (b_j - a_j)
+            m_j = degrees[j]
+            log_rtol_eff -= m_j * (
+                np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
+            )
+
+        # calculate & store chebyshev degree
+        degrees[i] = classic_cg_iteration_bound(
+            b_i / a_i,
+            log_rtol=log_rtol_eff,
+            exact_convergence=exact_convergence,
+        )
+    return int(np.sum(degrees) + N_t)
+
+
+###########################
+# Partitioning algorithms #
+###########################
 def split_eigenspectrum(eigs: np.ndarray) -> int:
     """
     Splits eigenspectrum between the two eigenvalues that have the largest mutual logarithmic distance.
@@ -49,8 +104,8 @@ def split_eigenspectrum(eigs: np.ndarray) -> int:
         int: The index of the eigenvalue after which the spectrum should be split.
     """
     eigs = np.asarray(eigs)
-    log_distances = np.abs(np.log(eigs[1:] / eigs[:-1]))
-    return np.argmax(log_distances)
+    log_distances = np.log(eigs[1:]) - np.log(eigs[:-1])
+    return int(np.argmax(log_distances))
 
 
 def condition_number_threshold(k: float, k_l: float, k_r: float) -> bool:
@@ -104,112 +159,19 @@ def partition_eigenspectrum(eigs: np.ndarray) -> list[int]:
         return [len(eigs) - 1]
 
 
-def multi_cluster_cg_iteration_bound(
-    clusters: list[tuple[float, float]],
-    log_rtol: float = np.log(1e-6),
-    exact_convergence: bool = True,
-) -> int:
-    """
-    Calculates an improved CG iteration bound for non-uniform eigenspectra.
-    Assumes available knowledge on the whereabouts of eigenvalue clusters
-
-    Args:
-        clusters (list[tuple[float, float]]): List of tuples representing the clusters of eigenvalues.
-            Each tuple contains the lower and upper bounds of the cluster.
-        log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
-        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
-            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
-    """
-    degrees = [0] * len(clusters)
-
-    # find all clusters with unit condition number
-    unit_clusters = [i for i, (a, b) in enumerate(clusters) if a == b]
-
-    for i, cluster in enumerate(clusters):
-        if i in unit_clusters:
-            continue
-        a_i, b_i = cluster
-
-        # subtract unit cluster contributions from log_rtol
-        log_rtol_eff = log_rtol - np.sum(
-            [np.log(abs(1 - b_i / clusters[u][0])) for u in unit_clusters]
-        )
-        for j in range(i):
-            a_j, b_j = clusters[j]
-            if a_j != b_j:
-                z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
-                z_2 = (b_j + a_j) / (b_j - a_j)
-                m_j = degrees[j]
-                log_rtol_eff -= m_j * (
-                    np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
-                )
-            # else:
-            #     # if the cluster has unit condition number, we assume a regular polynomial
-            #     log_rtol_eff -= np.log(abs(1 - b_i / a_j))
-
-        # calculate & store chebyshev degree
-        degrees[i] = classic_cg_iteration_bound(
-            b_i / a_i,
-            log_rtol=log_rtol_eff,
-            exact_convergence=exact_convergence,
-        )
-    return np.sum(degrees) + len(unit_clusters)  # add the unit clusters count
-
-
-def sharpened_cg_iteration_bound(
-    eigs: np.ndarray, log_rtol: float = np.log(1e-6), exact_convergence: bool = True
-) -> int:
-    """
-    Calculates a sharpened CG iteration bound for non-uniform eigenspectra.
-
-    Args:
-        eigs (np.ndarray): The sorted (approximate) eigenvalues of the system.
-        log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
-        exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
-            otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
-    """
-    eigs = np.asarray(eigs)
-    if len(eigs) == 1:
-        # Only one eigenvalue provided, not enough information to calculate bound
-        return 1
-    if not np.all(eigs[:-1] <= eigs[1:]):
-        eigs = np.sort(eigs)  # Ensure eigenvalues are sorted in ascending order
-    if eigs[0] <= 0:
-        raise ValueError("All eigenvalues must be positive.")
-    partition_indices = partition_eigenspectrum(eigs)
-    clusters = []
-    start = 0
-    for end in partition_indices:
-        clusters.append((eigs[start], eigs[end]))
-        start = end + 1
-    return multi_cluster_cg_iteration_bound(
-        clusters, log_rtol=log_rtol, exact_convergence=exact_convergence
-    )
-
-
 def tail_condition(p: int, k: float, k_l: float, k_r: float, log_rtol: float) -> bool:
-    if k_l > k_r:
-        return False  # expansion is not valid
+    minimum_density = (np.log(2) - log_rtol) / np.log(4 * k / k_l)
+    if p < minimum_density:
+        LOGGER.debug(
+            f"Number of tail eigenvalues p={p} is below minimum density {minimum_density}."
+        )
 
-    sparsity_condition = p < np.sqrt(k_l) / 2 * (np.log(2) - log_rtol)
-    uniform_performance_threshold = p < np.sqrt(k / k_r) * (
-        np.log(2) - log_rtol
-    ) / np.log(4 * k / k_l)
-    two_cluster_performance_threshold = (
-        p
-        < np.sqrt(k_l)
-        * (np.log(2) - log_rtol)
-        * (1 / (np.sqrt(k_r) * np.log(4 * k / k_l)) + 1 / 2)
-        + 1
-    )
-    return (
-        sparsity_condition
-        and uniform_performance_threshold
-        and two_cluster_performance_threshold
-    )
+    tail_cluster_condition = p < np.sqrt(k_l) / 2 * (np.log(2) - log_rtol)
+    sparsity_condition = p < np.sqrt(k / k_r) * minimum_density
+    return tail_cluster_condition and sparsity_condition
 
 
-def partition_mixed_eigenspectrum(
+def partition_eigenspectrum_tails(
     eigs: np.ndarray,
     log_rtol: float,
     tail_eigenvalues: list[float] = [],
@@ -223,7 +185,7 @@ def partition_mixed_eigenspectrum(
         eigs (np.ndarray): The sorted eigenvalues of the system.
         log_rtol (float): The log of the convergence tolerance.
         tail_eigenvalues (list[float]): empty list to hold tail eigenvalues.
-        tail_indices (list[int]): empty list to hold starting indices of tail cluster.
+        tail_indices (list[int]): empty list to hold starting indices of tail clusters.
     Returns:
         list[int]: The partition indices.
     """
@@ -246,7 +208,7 @@ def partition_mixed_eigenspectrum(
         return [split_index] + (
             p
             + np.array(
-                partition_mixed_eigenspectrum(
+                partition_eigenspectrum_tails(
                     eigs[p:],
                     log_rtol=log_rtol,
                     tail_eigenvalues=tail_eigenvalues,
@@ -257,7 +219,7 @@ def partition_mixed_eigenspectrum(
         ).tolist()
     elif condition_number_threshold(k, k_l, k_r):
         return (
-            partition_mixed_eigenspectrum(
+            partition_eigenspectrum_tails(
                 eigs[:p],
                 log_rtol=log_rtol,
                 tail_eigenvalues=tail_eigenvalues,
@@ -267,7 +229,7 @@ def partition_mixed_eigenspectrum(
             + (
                 p
                 + np.array(
-                    partition_mixed_eigenspectrum(
+                    partition_eigenspectrum_tails(
                         eigs[p:],
                         log_rtol=log_rtol,
                         tail_eigenvalues=tail_eigenvalues,
@@ -281,57 +243,51 @@ def partition_mixed_eigenspectrum(
         return [len(eigs) - 1]
 
 
-def mixed_multi_cluster_cg_iteration_bound(
-    clusters: list[tuple[float, float]],
-    tail_eigenvalues: list[float],
-    log_rtol: float = np.log(1e-6),
-    exact_convergence: bool = True,
+####################################
+# Multi-cluster CG iteration bound #
+####################################
+def multi_cluster_cg_iteration_bound(
+    eigs: np.ndarray, log_rtol: float = np.log(1e-6), exact_convergence: bool = True
 ) -> int:
     """
-    Similar to `multi_cluster_cg_iteration_bound`, but allows for a list of tail eigenvalues to be passed in.
+    Calculates a sharpened CG iteration bound for non-uniform eigenspectra.
 
     Args:
-        clusters (list[tuple[float, float]]): List of tuples representing the clusters of eigenvalues.
-            Each tuple contains the lower and upper bounds of the cluster.
-        tail_eigenvalues (list[float]): List of tail eigenvalues.
+        eigs (np.ndarray): The sorted (approximate) eigenvalues of the system.
         log_rtol (float): The log of the convergence tolerance. Defaults to np.log(1e-6).
         exact_convergence (bool): If True, log_rtol is the log of the relative error tolerance convergence criterion,
             otherwise log_rtol corresponds to the log of the relative residual tolerance. Defaults to True.
     """
-    degrees = [0] * len(clusters)
-
-    # Each factor is (1 - x / lambda_i) = (-1/lambda_i)x + 1
-    factors = [np.poly1d([-1.0 / eig, 1.0]) for eig in tail_eigenvalues]
-
-    # Multiply all factors together
-    r_poly = np.poly1d([1.0])  # start with the constant polynomial 1
-    for f in factors:
-        r_poly *= f
-
-    for i, cluster in enumerate(clusters):
-        a_i, b_i = cluster
-        log_rtol_eff = log_rtol - np.sum(
-            [np.log(abs(1 - b_i / eig)) for eig in tail_eigenvalues]
-        )
-        for j in range(i):
-            a_j, b_j = clusters[j]
-            z_1 = (b_j + a_j - 2 * b_i) / (b_j - a_j)
-            z_2 = (b_j + a_j) / (b_j - a_j)
-            m_j = degrees[j]
-            log_rtol_eff -= m_j * (
-                np.log(abs(z_1 - np.sqrt(z_1**2 - 1)) / (z_2 + np.sqrt(z_2**2 - 1)))
-            )
-
-        # calculate & store chebyshev degree
-        degrees[i] = classic_cg_iteration_bound(
-            b_i / a_i,
-            log_rtol=log_rtol_eff,
-            exact_convergence=exact_convergence,
-        )
-    return np.sum(degrees) + len(tail_eigenvalues)  # add the tail eigenvalues count
+    eigs = np.asarray(eigs)
+    if len(eigs) == 1:
+        # Only one eigenvalue provided, not enough information to calculate bound
+        return 1
+    if not np.all(eigs[:-1] <= eigs[1:]):
+        eigs = np.sort(eigs)  # Ensure eigenvalues are sorted in ascending order
+    if eigs[0] <= 0:
+        raise ValueError("All eigenvalues must be positive.")
+    clusters = []
+    tail_eigenvalues = []
+    start = 0
+    partition_indices = partition_eigenspectrum(eigs)
+    for end in partition_indices:
+        if start == end:
+            tail_eigenvalues.append(eigs[start])
+        else:
+            clusters.append((eigs[start], eigs[end]))
+        start = end + 1
+    return generalized_cg_iteration_bound(
+        clusters,
+        tail_eigenvalues=tail_eigenvalues,
+        log_rtol=log_rtol,
+        exact_convergence=exact_convergence,
+    )
 
 
-def mixed_sharpened_cg_iteration_bound(
+#########################################
+# Multi-tail-cluster CG iteration bound #
+#########################################
+def multi_tail_cluster_cg_iteration_bound(
     eigs: np.ndarray, log_rtol: float = np.log(1e-6), exact_convergence: bool = True
 ) -> int:
     """
@@ -353,7 +309,7 @@ def mixed_sharpened_cg_iteration_bound(
         raise ValueError("All eigenvalues must be positive.")
     tail_eigenvalues = []
     tail_indices = []
-    partition_indices = partition_mixed_eigenspectrum(
+    partition_indices = partition_eigenspectrum_tails(
         eigs,
         log_rtol=log_rtol,
         tail_eigenvalues=tail_eigenvalues,
@@ -365,7 +321,7 @@ def mixed_sharpened_cg_iteration_bound(
         if not np.isin(start, tail_indices):  # skip over tail clusters
             clusters.append((eigs[start], eigs[end]))
         start = end + 1
-    return mixed_multi_cluster_cg_iteration_bound(
+    return generalized_cg_iteration_bound(
         clusters,
         tail_eigenvalues=tail_eigenvalues,
         log_rtol=log_rtol,
@@ -373,15 +329,24 @@ def mixed_sharpened_cg_iteration_bound(
     )
 
 
+########################################
+# Incremental CG iteration bound class #
+########################################
 class CGIterationBound:
     """
+    This class provides an incremental way to calculate the CG iteration bound based on the approximate spectrum of the system matrix obtained from the Lanczos matrix during a CG process.
+
+    It allows for updating the bound with new spectra as they become available, and provides properties to access the current bounds and estimates.
+
+    Bounds are updated whenever every eigenvalue cluster has converged, which is defined as the relative change in the clusters' bounds being less than 10% compared to a previous iteration.
+
     Attributes
     ----------
         classic (tuple[int, int]): The CG iteration and the classic CG iteration bound calculated from the spectrum at that iteration. Returns the latest bound.
         multi_cluster (tuple[int, int]): The sharpened multi-cluster CG iteration bound, same format as `classic`.
         tail_cluster (tuple[int, int]): The sharpened multi-cluster-tail CG iteration bound, same format as `classic`.
         estimate (tuple[int, int]): An estimate of CG's iteration count at convergence, same format as `classic`.
-        classic_l (list[tuple[int, int]]): List of tuples containing the iteration and the classic CG iteration bound.
+        classic_l (list[tuple[int, int]]): List of tuples containing the iteration and the classic CG iteration bound at that iteration.
         multi_cluster_l (list[tuple[int, int]]): List of tuples containing the iteration and the multi-cluster CG iteration bound.
         tail_cluster_l (list[tuple[int, int]]): List of tuples containing the iteration and the tail cluster CG iteration bound.
         estimate_l (list[tuple[int, int]]): List of tuples containing the iteration and the estimate of CG's iteration count at convergence.
@@ -390,12 +355,15 @@ class CGIterationBound:
     ----------
     ```python
         eps = 1e-8 # CG relative error tolerance
-        cg_iter_bound = CGIterationBound(log_rtol=(np.log(epsilon)))
+        cg_iter_bound = CGIterationBound(log_rtol=np.log(epsilon))
         i = 0 # CG iteration index
         update_frequency = 5 # update every 5 iterations
+        alpha, beta = [] # CG coefficients
         while ... #CG has not converged:
             # CG iteration here
             # ...
+            alpha.append(new_alpha)
+            beta.append(new_beta)
             i += 1
 
             if i % update_frequency == 0:
@@ -489,7 +457,7 @@ class CGIterationBound:
         self._previous_clusters = current_clusters
 
     @property
-    def classic(self) -> Optional[int]:
+    def classic(self) -> Optional[tuple[int, int]]:
         if self._num_clusters_detected > self._CLASSIC_BOUND_CLUSTER_THRESHOLD:
             LOGGER.debug(
                 self._CLUSTER_THRESHOLD_NOT_MET.format(
@@ -540,7 +508,7 @@ class CGIterationBound:
             self.multi_cluster_l.append(
                 (
                     iteration,
-                    sharpened_cg_iteration_bound(
+                    multi_cluster_cg_iteration_bound(
                         self.spectrum,
                         log_rtol=self.log_rtol,
                         exact_convergence=self.exact_convergence,
@@ -552,7 +520,7 @@ class CGIterationBound:
         self.tail_cluster_l.append(
             (
                 iteration,
-                mixed_sharpened_cg_iteration_bound(
+                multi_tail_cluster_cg_iteration_bound(
                     self.spectrum,
                     log_rtol=self.log_rtol,
                     exact_convergence=self.exact_convergence,
@@ -587,18 +555,14 @@ class CGIterationBound:
         multi_cluster_str = ""
         if self.multi_cluster_l:
             for i, bound in self.multi_cluster_l:
-                multi_cluster_str += (
-                    f"\n\t{pre_str}{'i=' + str(i) + '->' + str(bound)}"
-                )
+                multi_cluster_str += f"\n\t{pre_str}{'i=' + str(i) + '->' + str(bound)}"
         else:
             multi_cluster_str = f"\n\t{pre_str}{None}"
 
         tail_cluster_str = ""
         if self.tail_cluster_l:
             for i, bound in self.tail_cluster_l:
-                tail_cluster_str += (
-                    f"\n\t{pre_str}{'i=' + str(i) + '->' + str(bound)}"
-                )
+                tail_cluster_str += f"\n\t{pre_str}{'i=' + str(i) + '->' + str(bound)}"
         else:
             tail_cluster_str = f"\n\t{pre_str}{None}"
 
