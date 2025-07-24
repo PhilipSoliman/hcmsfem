@@ -15,7 +15,7 @@ from matplotlib.patches import Polygon
 from ngsolve.meshes import MakeQuadMesh
 
 from hcmsfem.logger import LOGGER, PROGRESS
-from hcmsfem.plot_utils import CUSTOM_COLORS_SIMPLE
+from hcmsfem.plot_utils import CUSTOM_COLORS_SIMPLE, CustomColors
 from hcmsfem.root import get_venv_root
 
 DATA_DIR = get_venv_root() / "data"
@@ -1444,10 +1444,10 @@ class TwoLevelMesh:
             edgecolor = "black"
         elif mesh_type == "coarse":
             mesh = self.coarse_mesh
-            linewidth = 2.0
+            linewidth = 0.0
             alpha = 0.5
-            fillcolor = "lightblue"
-            edgecolor = "darkblue"
+            fillcolor = CustomColors.SKY.value
+            edgecolor = "None"
         else:
             msg = f"Invalid mesh_type '{mesh_type}'. " "Please use 'fine' or 'coarse'."
             LOGGER.error(msg)
@@ -1463,6 +1463,16 @@ class TwoLevelMesh:
                 alpha=alpha,
                 linewidth=linewidth,
             )
+            if mesh_type == "coarse": # plot edges seperately
+                self.plot_element(
+                    ax,
+                    el,
+                    self.coarse_mesh,
+                    fillcolor=None,
+                    edgecolor=CustomColors.NAVY.value,
+                    alpha=1.0,
+                    linewidth=2.0,
+                )
         return ax
 
     def plot_domains(
@@ -1496,8 +1506,8 @@ class TwoLevelMesh:
                 fillcolor=None,
                 edgecolor="black",
                 alpha=1.0,
-                linewidth=2.0,
-                zorder=TwoLevelMesh.ZORDERS["edges"] + 0.1,
+                linewidth=1.0,
+                zorder=TwoLevelMesh.ZORDERS["edges"],
             )
             domain_elements = subdomain_data["interior"]
             if domains_int_toggle:
@@ -1515,6 +1525,8 @@ class TwoLevelMesh:
                     fillcolor=fillcolor,
                     alpha=opacity,
                     edgecolor="black",
+                    linewidth=0.5,
+                    zorder=TwoLevelMesh.ZORDERS["elements"],
                 )
             if plot_layers:
                 for layer_idx in range(1, self.layers + 1):
@@ -1532,6 +1544,7 @@ class TwoLevelMesh:
                             edgecolor="black",
                             label=f"layersLayer {layer_idx} Element",
                             zorder=TwoLevelMesh.ZORDERS["layers"],
+                            linewidth=0.5,
                         )
         return ax
 
@@ -1916,6 +1929,7 @@ class TwoLevelMeshExamples:
     def profile(cls, creation: bool = True, loading: bool = True, top: int = 10):
         import cProfile
         import pstats
+
         from hcmsfem.visualize_profile import visualize_profile
         if creation:
             fp = cls.SAVE_DIR / "mesh_creation.prof"
