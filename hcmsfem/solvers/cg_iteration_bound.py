@@ -359,7 +359,7 @@ class CGIterationBound:
         i = 0 # CG iteration index
         update_frequency = 5 # update every 5 iterations
         alpha, beta = [] # CG coefficients
-        while ... #CG has not converged:
+        while ... # CG has not converged:
             # CG iteration here
             # ...
             alpha.append(new_alpha)
@@ -374,12 +374,8 @@ class CGIterationBound:
     ```
 
     """
-
-    _CLASSIC_BOUND_CLUSTER_THRESHOLD: int = 1
-    _MULTI_CLUSTER_BOUND_CLUSTER_THRESHOLD: int = 2
-    _CLUSTER_THRESHOLD_NOT_MET = "Need to have detected at least {0:.0f} clusters to access this bound. Currently detected {1} cluster(s)."
-    _FORMAT_STRING_WIDTH = 14
-
+    CLUSTER_CONVERGENCE_TOLERANCE = 0.1  # relative change in clusters' bounds
+    FORMAT_STRING_WIDTH = 14
     def __init__(self, log_rtol: float = np.log(1e-6), exact_convergence: bool = True):
         self.log_rtol = log_rtol
         self.exact_convergence = exact_convergence
@@ -424,14 +420,14 @@ class CGIterationBound:
         all_close = False
         if len(self._previous_clusters) == len(current_clusters):
             all_close = np.allclose(
-                self._previous_clusters / current_clusters, 1, atol=1e-1
+                self._previous_clusters / current_clusters, 1, atol=self.CLUSTER_CONVERGENCE_TOLERANCE
             )
 
         # check for earlier cluster convergence
         found_earlier_convergence = False
         if len(self._converged_clusters) == len(current_clusters):
             found_earlier_convergence = np.allclose(
-                self._converged_clusters / current_clusters, 1, atol=1e-1
+                self._converged_clusters / current_clusters, 1, atol=self.CLUSTER_CONVERGENCE_TOLERANCE
             )
 
         if all_close and not found_earlier_convergence:
@@ -458,24 +454,10 @@ class CGIterationBound:
 
     @property
     def classic(self) -> Optional[tuple[int, int]]:
-        if self._num_clusters_detected > self._CLASSIC_BOUND_CLUSTER_THRESHOLD:
-            LOGGER.debug(
-                self._CLUSTER_THRESHOLD_NOT_MET.format(
-                    self._CLASSIC_BOUND_CLUSTER_THRESHOLD,
-                    self._num_clusters_detected,
-                )
-            )
         return self._classic[-1] if self.classic_l else None
 
     @property
     def multi_cluster(self) -> Optional[tuple[int, int]]:
-        if self._num_clusters_detected > self._MULTI_CLUSTER_BOUND_CLUSTER_THRESHOLD:
-            LOGGER.debug(
-                self._CLUSTER_THRESHOLD_NOT_MET.format(
-                    self._MULTI_CLUSTER_BOUND_CLUSTER_THRESHOLD,
-                    self._num_clusters_detected,
-                )
-            )
         return self.multi_cluster_l[-1] if self.multi_cluster_l else None
 
     @property
@@ -492,31 +474,27 @@ class CGIterationBound:
 
     # helper
     def _update_bounds(self, iteration: int) -> None:
-        if self._num_clusters_detected >= self._CLASSIC_BOUND_CLUSTER_THRESHOLD:
-            k = self.spectrum[-1] / self.spectrum[0]
-            self.classic_l.append(
-                (
-                    iteration,
-                    classic_cg_iteration_bound(
-                        k,
-                        log_rtol=self.log_rtol,
-                        exact_convergence=self.exact_convergence,
-                    ),
-                )
+        k = self.spectrum[-1] / self.spectrum[0]
+        self.classic_l.append(
+            (
+                iteration,
+                classic_cg_iteration_bound(
+                    k,
+                    log_rtol=self.log_rtol,
+                    exact_convergence=self.exact_convergence,
+                ),
             )
-        if self._num_clusters_detected >= self._MULTI_CLUSTER_BOUND_CLUSTER_THRESHOLD:
-            self.multi_cluster_l.append(
-                (
-                    iteration,
-                    multi_cluster_cg_iteration_bound(
-                        self.spectrum,
-                        log_rtol=self.log_rtol,
-                        exact_convergence=self.exact_convergence,
-                    ),
-                )
+        )
+        self.multi_cluster_l.append(
+            (
+                iteration,
+                multi_cluster_cg_iteration_bound(
+                    self.spectrum,
+                    log_rtol=self.log_rtol,
+                    exact_convergence=self.exact_convergence,
+                ),
             )
-
-        # NOTE: can always calculate the tail cluster bound
+        )
         self.tail_cluster_l.append(
             (
                 iteration,
@@ -538,7 +516,7 @@ class CGIterationBound:
 
     # output string
     def __str__(self):
-        w = self._FORMAT_STRING_WIDTH
+        w = self.FORMAT_STRING_WIDTH
         tolerance_type = (
             "relative error" if self.exact_convergence else "relative residual"
         )
