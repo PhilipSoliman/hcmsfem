@@ -372,25 +372,27 @@ class CGIterationBound:
                 cg_iter_bound.update(spectrum)
         cg_iter_bound.show()
     ```
-
     """
+
     CLUSTER_CONVERGENCE_TOLERANCE = 0.1  # relative change in clusters' bounds
     FORMAT_STRING_WIDTH = 14
+
     def __init__(self, log_rtol: float = np.log(1e-6), exact_convergence: bool = True):
         self.log_rtol = log_rtol
         self.exact_convergence = exact_convergence
 
         # bounds
-        self.classic_l = []  # lists of tuples (iteration, bound)
-        self.multi_cluster_l = []
-        self.tail_cluster_l = []
+        self.classic_l: list[int] = []
+        self.multi_cluster_l: list[int] = []
+        self.tail_cluster_l: list[int] = []
 
         # iteration estimate
-        self.estimate_l = []  # lists of tuples (iteration, estimate)
+        self.estimate_l: list[int] = []
 
-        # bookkeeping
-        self._iteration = 0
-        self._num_clusters_detected = 0
+        # iterations at which cluster convergence is detected
+        self.iterations: list[int] = []
+
+        # spectrum information
         self._num_converged_spectra = 0
         self._previous_clusters = np.array([])
         self._converged_clusters = np.array([])
@@ -401,7 +403,6 @@ class CGIterationBound:
         Args:
             spectrum (np.ndarray): The current spectrum of eigenvalues.
         """
-
         # CG iteration index
         iteration = len(spectrum)
 
@@ -420,31 +421,32 @@ class CGIterationBound:
         all_close = False
         if len(self._previous_clusters) == len(current_clusters):
             all_close = np.allclose(
-                self._previous_clusters / current_clusters, 1, atol=self.CLUSTER_CONVERGENCE_TOLERANCE
+                self._previous_clusters / current_clusters,
+                1,
+                atol=self.CLUSTER_CONVERGENCE_TOLERANCE,
             )
 
         # check for earlier cluster convergence
         found_earlier_convergence = False
         if len(self._converged_clusters) == len(current_clusters):
             found_earlier_convergence = np.allclose(
-                self._converged_clusters / current_clusters, 1, atol=self.CLUSTER_CONVERGENCE_TOLERANCE
+                self._converged_clusters / current_clusters,
+                1,
+                atol=self.CLUSTER_CONVERGENCE_TOLERANCE,
             )
 
         if all_close and not found_earlier_convergence:
             # save the current clusters as converged
             self._converged_clusters = current_clusters
 
-            # update the number of clusters detected
-            self._num_clusters_detected = len(partition_indices)
-
             # increment the number of converged spectra
             self._num_converged_spectra += 1
 
-            # store spectrum
-            self.spectrum = spectrum
+            # store current iteration
+            self.iterations.append(iteration)
 
             # update the bounds
-            self._update_bounds(iteration)
+            self._update_bounds(spectrum)
             LOGGER.info(
                 f"Novel cluster convergence detected at iteration {iteration}. Bounds updated.",
             )
@@ -453,66 +455,53 @@ class CGIterationBound:
         self._previous_clusters = current_clusters
 
     @property
-    def classic(self) -> Optional[tuple[int, int]]:
-        return self._classic[-1] if self.classic_l else None
+    def classic(self) -> Optional[int]:
+        return self._classic[-1] if self._num_converged_spectra > 0 else None
 
     @property
-    def multi_cluster(self) -> Optional[tuple[int, int]]:
-        return self.multi_cluster_l[-1] if self.multi_cluster_l else None
+    def multi_cluster(self) -> Optional[int]:
+        return self.multi_cluster_l[-1] if self._num_converged_spectra > 0 else None
 
     @property
-    def tail_cluster(self) -> Optional[tuple[int, int]]:
-        return self.tail_cluster_l[-1] if self.tail_cluster_l else None
+    def tail_cluster(self) -> Optional[int]:
+        return self.tail_cluster_l[-1] if self._num_converged_spectra > 0 else None
 
     @property
-    def estimate(self) -> Optional[tuple[int, int]]:
-        return self._estimate_l[-1] if self._estimate_l else None
+    def estimate(self) -> Optional[int]:
+        return self._estimate_l[-1] if self._num_converged_spectra > 0 else None
 
     def show(self):
         with LOGGER.setLevelContext(LOGGER.INFO):  # ensure string is visible in console
             LOGGER.info(str(self))
 
     # helper
-    def _update_bounds(self, iteration: int) -> None:
-        k = self.spectrum[-1] / self.spectrum[0]
+    def _update_bounds(self, spectrum: np.ndarray) -> None:
+        k = spectrum[-1] / spectrum[0]
         self.classic_l.append(
-            (
-                iteration,
-                classic_cg_iteration_bound(
-                    k,
-                    log_rtol=self.log_rtol,
-                    exact_convergence=self.exact_convergence,
-                ),
-            )
+            classic_cg_iteration_bound(
+                k,
+                log_rtol=self.log_rtol,
+                exact_convergence=self.exact_convergence,
+            ),
         )
         self.multi_cluster_l.append(
-            (
-                iteration,
-                multi_cluster_cg_iteration_bound(
-                    self.spectrum,
-                    log_rtol=self.log_rtol,
-                    exact_convergence=self.exact_convergence,
-                ),
-            )
+            multi_cluster_cg_iteration_bound(
+                spectrum,
+                log_rtol=self.log_rtol,
+                exact_convergence=self.exact_convergence,
+            ),
         )
         self.tail_cluster_l.append(
-            (
-                iteration,
-                multi_tail_cluster_cg_iteration_bound(
-                    self.spectrum,
-                    log_rtol=self.log_rtol,
-                    exact_convergence=self.exact_convergence,
-                ),
-            )
+            multi_tail_cluster_cg_iteration_bound(
+                spectrum,
+                log_rtol=self.log_rtol,
+                exact_convergence=self.exact_convergence,
+            ),
         )
 
-        if self.multi_cluster is not None:
-            self.estimate_l.append(
-                (
-                    iteration,
-                    int(np.ceil((self.tail_cluster[1] + self.multi_cluster[1]) / 2)),
-                )
-            )
+        self.estimate_l.append(
+            int(np.ceil((self.tail_cluster + self.multi_cluster) / 2)),
+        )
 
     # output string
     def __str__(self):
@@ -521,46 +510,28 @@ class CGIterationBound:
             "relative error" if self.exact_convergence else "relative residual"
         )
         tolerance_str = f"{tolerance_type} < {np.exp(self.log_rtol):.2e}"
-
-        pre_str = f"\t"
-        classic_str = ""
-        if self.classic_l:
-            for i, bound in self.classic_l:
-                classic_str += f"\n\t{pre_str}{'i=' + str(i) + '->' + str(bound)}"
+        bounds = ""
+        if self.iterations:
+            for i, classic, multi_cluster, tail_cluster, estimate in zip(
+                self.iterations,
+                self.classic_l,
+                self.multi_cluster_l,
+                self.tail_cluster_l,
+                self.estimate_l,
+            ):
+                bounds += f"\n\ti={i}"
+                bounds += f"\n\t\t{'classic: ' + str(classic):<{w}}"
+                bounds += f"\n\t\t{'multi-cluster: ' + str(multi_cluster):<{w}}"
+                bounds += f"\n\t\t{'tail-cluster: ' + str(tail_cluster):<{w}}"
+                bounds += f"\n\t\t{'estimate: ' + str(estimate):<{w}}"
         else:
-            classic_str = f"\n\t{pre_str}{None}"
+            bounds = f"\n\t{None}"
 
-        multi_cluster_str = ""
-        if self.multi_cluster_l:
-            for i, bound in self.multi_cluster_l:
-                multi_cluster_str += f"\n\t{pre_str}{'i=' + str(i) + '->' + str(bound)}"
-        else:
-            multi_cluster_str = f"\n\t{pre_str}{None}"
-
-        tail_cluster_str = ""
-        if self.tail_cluster_l:
-            for i, bound in self.tail_cluster_l:
-                tail_cluster_str += f"\n\t{pre_str}{'i=' + str(i) + '->' + str(bound)}"
-        else:
-            tail_cluster_str = f"\n\t{pre_str}{None}"
-
-        estimate_str = ""
-        if self.estimate_l:
-            for i, estimate in self.estimate_l:
-                estimate_str += f"\n\t{pre_str}{'i=' + str(i) + '->' + str(estimate)}"
-        else:
-            estimate_str = f"\n\t{pre_str}{None}"
         return (
-            "[bold]CG Iteration Bounds[/bold]"
-            f"\n\t{'classic':<{w}}{classic_str}"
-            f"\n\t{'multi-cluster':<{w}}{multi_cluster_str}"
-            f"\n\t{'tail-cluster':<{w}}{tail_cluster_str}"
-            f"\n\n[bold]CG Iteration Estimate[/bold]"
-            f"\n\t{'estimate':<{w}}{estimate_str}"
+            f"[bold]CG Iteration Bounds & Estimate[/bold]{bounds}"
             f"\n\n[bold]Convergence criterion[/bold]"
             f"\n\t{tolerance_str}"
             f"\n\n[bold]Spectrum Information[/bold]"
-            f"\n\tspectrum size (most recent): {len(self.spectrum)}"
-            f"\n\tnumber of clusters detected: {self._num_clusters_detected}"
+            f"\n\tspectrum size (most recent): {self.iterations[-1] if self.iterations else 0}"
             f"\n\tnumber of converged spectra: {self._num_converged_spectra}"
         )
