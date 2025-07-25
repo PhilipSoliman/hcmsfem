@@ -120,6 +120,7 @@ class CustomColors(Enum):
     GOLD = "#B38B6D"
     SKY = "#7EAFF1"
     BEIGE = "#B79A89"
+    SOFTSKY = "#9CC3F5"
 
 
 # define pre and post strings
