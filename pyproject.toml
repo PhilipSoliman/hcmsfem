@@ -13,7 +13,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
-    "numpy==2.0.2",
+    "numpy==2.2.6",
     "matplotlib==3.10.1",
     "tqdm==4.67.1",
     "ngsolve==6.2.2406",
