@@ -41,5 +41,3 @@ def get_cli_args(
 
     args = parser.parse_args()
     return args
-
-CLI_ARGS = get_cli_args()
