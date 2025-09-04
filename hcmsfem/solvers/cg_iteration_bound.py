@@ -96,7 +96,7 @@ def generalized_cg_iteration_bound(
 ###########################
 def split_eigenspectrum(eigs: np.ndarray) -> int:
     """
-    Splits eigenspectrum between the two eigenvalues that have the largest mutual logarithmic distance.
+    Splits eigenspectrum between the two eigenvalues that have the largest mutual relative distance.
 
     Args:
         eigs (list or np.ndarray): The sorted eigenvalues of the system.
@@ -104,8 +104,8 @@ def split_eigenspectrum(eigs: np.ndarray) -> int:
         int: The index of the eigenvalue after which the spectrum should be split.
     """
     eigs = np.asarray(eigs)
-    log_distances = np.log(eigs[1:]) - np.log(eigs[:-1])
-    return int(np.argmax(log_distances))
+    rel_distances = eigs[1:] / eigs[:-1]
+    return int(np.argmax(rel_distances))
 
 
 def condition_number_threshold(k: float, k_l: float, k_r: float) -> bool:
