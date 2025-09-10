@@ -105,12 +105,12 @@ CUSTOM_COLORS_FULL = CUSTOM_COLOURS_P1 + CUSTOM_COLOURS_P2 + CUSTOM_COLORS_P3
 
 CUSTOM_COLORS_SIMPLE = [
     "#945357",  # Deep Reddish Brown
-    "#7A8F99",  # Blueish Muted Blue-Gray
+    # "#7A8F99",  # Blueish Muted Blue-Gray
     # "#869099",  # Muted Blue-Gray
+    "#B79A89",  # Dark Warm Beige
     "#253242",  # Dark Navy
     "#B38B6D",  # Golden Brown
     "#7EAFF1",  # Soft Sky Blue
-    "#B79A89",  # Dark Warm Beige
 ]
 
 
