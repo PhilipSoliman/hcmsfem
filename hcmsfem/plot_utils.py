@@ -12,6 +12,7 @@ from matplotlib.pyplot import savefig
 from hcmsfem.root import get_venv_root
 
 FIG_FOLDER = get_venv_root() / "figures"
+IMAGE_DIR = get_venv_root() / "images"
 
 MPL_LINE_STYLES = [
     "-",  # solid
@@ -124,7 +125,9 @@ class CustomColors(Enum):
 
 
 # define pre and post strings
-LATEX_STANDALONE_PGF_PRE = r"""\documentclass{standalone} 
+LATEX_STANDALONE_DOCUMENTCLASS = r"\documentclass{standalone}"
+
+LATEX_STANDALONE_PREAMBLE = r"""
 \def\mathdefault#1{#1}
 \everymath=\expandafter{\the\everymath\displaystyle}
 \usepackage{amsmath}
@@ -138,6 +141,9 @@ LATEX_STANDALONE_PGF_PRE = r"""\documentclass{standalone}
 \setmathtt{Tex Gyre Heros}
 \setmathrm{Tex Gyre Heros}
 \makeatletter\@ifpackageloaded{underscore}{}{\usepackage[strings]{underscore}}\makeatother
+"""
+
+LATEX_STANDALONE_PGF_PRE = LATEX_STANDALONE_PREAMBLE + r"""
 \begin{document} 
 """
 
@@ -152,7 +158,7 @@ class CartesianCoordinate(Enum):
     Z = 2
 
 
-def save_latex_figure(fn: str, fig: Figure | None = None) -> None:
+def save_latex_figure(fn: str, fig: Figure | None = None, save_tex: bool = False, save_png: bool = False, no_background: bool = False) -> None:
     # ensure figure directory exists
     FIG_FOLDER.mkdir(parents=True, exist_ok=True)
 
@@ -166,6 +172,7 @@ def save_latex_figure(fn: str, fig: Figure | None = None) -> None:
     # create tex file
     tex_p = pgf_p.with_suffix(".tex")
     with open(tex_p, "w") as tex_f:
+        tex_f.write(LATEX_STANDALONE_DOCUMENTCLASS)
         tex_f.write(LATEX_STANDALONE_PGF_PRE)
         tex_f.write(r"    \input{" + pgf_p.as_posix() + r"}")
         tex_f.write(LATEX_STANDALONE_PGF_POST)
@@ -182,9 +189,41 @@ def save_latex_figure(fn: str, fig: Figure | None = None) -> None:
     for file in FIG_FOLDER.glob("*.log"):
         remove(file)
 
-    # delete pgf & tex files
-    remove(tex_p)
-    remove(pgf_p)
+    # move tex file to separate folder if requested
+    if not save_tex:
+        remove(tex_p)
+        remove(pgf_p)
+
+    # save png if requested
+    if save_png:
+        fn_png = IMAGE_DIR / (fn + ".png")
+        if no_background: 
+            fig = reformat_fig(fig)
+        fig.savefig(fn_png, dpi=1000, bbox_inches="tight", pad_inches=0.1, transparent=no_background)
+
+def reformat_fig(fig: Figure) -> Figure:
+    fig.patch.set_facecolor(CustomColors.NAVY.value)
+    # set font colors to white
+    for ax in fig.axes:
+        ax.xaxis.label.set_color("white")
+        ax.yaxis.label.set_color("white")
+        ax.tick_params(axis="x", colors="white")
+        ax.tick_params(axis="y", colors="white")
+        for spine in ax.spines.values():
+            spine.set_edgecolor("white")
+        ax.set_facecolor(CustomColors.NAVY.value)
+        ax.title.set_color("white")
+        # Set all text in the axes to white
+        for text in ax.texts:
+            text.set_color("white")
+        # Set legend text and title to white
+        legend = ax.get_legend()
+        if legend is not None:
+            for text in legend.get_texts():
+                text.set_color("white")
+            legend.get_title().set_color("white")
+
+    return fig
 
 
 # set standard matploylib style
